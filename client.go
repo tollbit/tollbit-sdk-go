@@ -1,0 +1,147 @@
+package tollbit
+
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"strings"
+)
+
+type Client struct {
+	secretKey      string
+	organizationId string
+	userAgent      string
+}
+
+func NewClient(SecretKey string, OrganizationId string, UserAgent string) (*Client, error) {
+	c := &Client{
+		secretKey:      SecretKey,
+		organizationId: OrganizationId,
+		userAgent:      UserAgent,
+	}
+	return c, nil
+}
+
+type TokenParams struct {
+	Url            string
+	MaxPriceMicros int64
+	Currency       string // only supports USD for now
+}
+
+type tokenStruct struct {
+	OrgCuid        string `json:"orgCuid"`
+	Key            string `json:"key"`
+	Url            string `json:"url"`
+	UserAgent      string `json:"userAgent"`
+	MaxPriceMicros int64  `json:"maxPriceMicros"`
+	Currency       string `json:"currency"`
+}
+
+type ContentResponse struct {
+	Content string       `json:"content"`
+	Rate    RateResponse `json:"rate"`
+}
+
+type RateResponse struct {
+	PriceMicros int64  `json:"priceMicros"`
+	Currency    string `json:"currency"`
+	Error       string `json:"error"`
+}
+
+func (c *Client) GenerateToken(params TokenParams) (string, error) {
+	token := tokenStruct{
+		OrgCuid:        c.organizationId,
+		Key:            c.secretKey,
+		Url:            params.Url,
+		UserAgent:      c.userAgent,
+		MaxPriceMicros: params.MaxPriceMicros,
+		Currency:       params.Currency,
+	}
+	jsonToken, err := json.Marshal(token)
+	if err != nil {
+		return "", err
+	}
+	encryptedToken, err := Encrypt(jsonToken, c.secretKey)
+	if err != nil {
+		return "", err
+	}
+	return encryptedToken, nil
+}
+
+func (c *Client) GetContentWithToken(token string) (ContentResponse, error) {
+	decryptedToken, err := Decrypt(token, c.secretKey)
+	var t tokenStruct
+	err = json.Unmarshal(decryptedToken, &t)
+	if err != nil {
+		return ContentResponse{}, err
+	}
+
+	// first remove the https:// part
+	tollbitUrl := strings.TrimPrefix(strings.TrimPrefix(t.Url, "https://"), "http://")
+	// then remove any potential www. part
+	tollbitUrl = strings.TrimPrefix(tollbitUrl, "www.")
+	// then construct the actual url
+	tollbitUrl = "https://api.tollbit.com/dev/v1/content/" + tollbitUrl
+	req, err := http.NewRequest("GET", tollbitUrl, nil)
+	if err != nil {
+		return ContentResponse{}, err
+	}
+	req.Header.Add("TollbitOrgCuid", t.OrgCuid)
+	req.Header.Add("User-Agent", "Mozilla/5.0 (compatible; "+c.userAgent+"; +https://tollbit.com/bot)")
+	req.Header.Add("TollbitToken", token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ContentResponse{}, err
+	}
+	bodyBytes, err := io.ReadAll(resp.Body)
+	var contentResponse []ContentResponse
+	err = json.Unmarshal(bodyBytes, &contentResponse)
+	if err != nil {
+		return ContentResponse{}, err
+	}
+	if len(contentResponse) == 0 || contentResponse[0].Content == "" {
+		return ContentResponse{}, errors.New("could not get content")
+	}
+	return contentResponse[0], nil
+}
+
+func (c *Client) GetContent(params TokenParams) (ContentResponse, error) {
+	token, err := c.GenerateToken(params)
+	if err != nil {
+		return ContentResponse{}, err
+	}
+	contentResponse, err := c.GetContentWithToken(token)
+	if err != nil {
+		return ContentResponse{}, err
+	}
+	return contentResponse, nil
+}
+
+func (c *Client) GetRate(targetUrl string) (RateResponse, error) {
+	// first remove the https:// part
+	tollbitUrl := strings.TrimPrefix(strings.TrimPrefix(targetUrl, "https://"), "http://")
+	// then remove any potential www. part
+	tollbitUrl = strings.TrimPrefix(tollbitUrl, "www.")
+	// then construct the actual url
+	tollbitUrl = "https://api.tollbit.com/dev/v1/rate/" + tollbitUrl
+	req, err := http.NewRequest("GET", tollbitUrl, nil)
+	if err != nil {
+		return RateResponse{}, err
+	}
+	req.Header.Add("User-Agent", "Mozilla/5.0 (compatible; "+c.userAgent+"; +https://tollbit.com/bot)")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return RateResponse{}, err
+	}
+	bodyBytes, err := io.ReadAll(resp.Body)
+	var rateResponse []RateResponse
+	err = json.Unmarshal(bodyBytes, &rateResponse)
+	if err != nil {
+		return RateResponse{}, err
+	}
+	if len(rateResponse) == 0 {
+		return RateResponse{}, errors.New("could not get rate")
+	}
+	return rateResponse[0], nil
+}
