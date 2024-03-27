@@ -12,6 +12,7 @@ type Client struct {
 	secretKey      string
 	organizationId string
 	userAgent      string
+	httpClient     *http.Client
 }
 
 func NewClient(SecretKey string, OrganizationId string, UserAgent string) (*Client, error) {
@@ -19,6 +20,7 @@ func NewClient(SecretKey string, OrganizationId string, UserAgent string) (*Clie
 		secretKey:      SecretKey,
 		organizationId: OrganizationId,
 		userAgent:      UserAgent,
+		httpClient:     http.DefaultClient,
 	}
 	return c, nil
 }
@@ -90,7 +92,7 @@ func (c *Client) GetContentWithToken(token string) (ContentResponse, error) {
 	req.Header.Add("TollbitOrgCuid", t.OrgCuid)
 	req.Header.Add("User-Agent", "Mozilla/5.0 (compatible; "+c.userAgent+"; +https://tollbit.com/bot)")
 	req.Header.Add("TollbitToken", token)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return ContentResponse{}, err
 	}
@@ -130,7 +132,7 @@ func (c *Client) GetRate(targetUrl string) (RateResponse, error) {
 		return RateResponse{}, err
 	}
 	req.Header.Add("User-Agent", "Mozilla/5.0 (compatible; "+c.userAgent+"; +https://tollbit.com/bot)")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return RateResponse{}, err
 	}
