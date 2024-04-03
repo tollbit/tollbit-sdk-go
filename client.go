@@ -29,15 +29,24 @@ type TokenParams struct {
 	Url            string
 	MaxPriceMicros int64
 	Currency       string // only supports USD for now
+	LicenseType    LicenseType
 }
 
+// LicenseType these are "enums" for the types of licenses
+type LicenseType string
+
+const (
+	ON_DEMAND_LICENSE LicenseType = "ON_DEMAND_LICENSE"
+)
+
 type tokenStruct struct {
-	OrgCuid        string `json:"orgCuid"`
-	Key            string `json:"key"`
-	Url            string `json:"url"`
-	UserAgent      string `json:"userAgent"`
-	MaxPriceMicros int64  `json:"maxPriceMicros"`
-	Currency       string `json:"currency"`
+	OrgCuid        string      `json:"orgCuid"`
+	Key            string      `json:"key"`
+	Url            string      `json:"url"`
+	UserAgent      string      `json:"userAgent"`
+	MaxPriceMicros int64       `json:"maxPriceMicros"`
+	Currency       string      `json:"currency"`
+	LicenseType    LicenseType `json:"licenseType"`
 }
 
 type ContentResponse struct {
@@ -48,6 +57,8 @@ type ContentResponse struct {
 type RateResponse struct {
 	PriceMicros int64  `json:"priceMicros"`
 	Currency    string `json:"currency"`
+	LicenseType string `json:"licenseType"`
+	LicensePath string `json:"licensePath"`
 	Error       string `json:"error"`
 }
 
@@ -59,6 +70,7 @@ func (c *Client) GenerateToken(params TokenParams) (string, error) {
 		UserAgent:      c.userAgent,
 		MaxPriceMicros: params.MaxPriceMicros,
 		Currency:       params.Currency,
+		LicenseType:    params.LicenseType,
 	}
 	jsonToken, err := json.Marshal(token)
 	if err != nil {
