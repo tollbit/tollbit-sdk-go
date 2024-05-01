@@ -50,8 +50,14 @@ type tokenStruct struct {
 }
 
 type ContentResponse struct {
-	Content string       `json:"content"`
+	Content Content      `json:"content"`
 	Rate    RateResponse `json:"rate"`
+}
+
+type Content struct {
+	Header string `json:"header"`
+	Main   string `json:"main"`
+	Footer string `json:"footer"`
 }
 
 type RateResponse struct {
