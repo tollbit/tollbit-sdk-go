@@ -50,8 +50,9 @@ type tokenStruct struct {
 }
 
 type ContentResponse struct {
-	Content Content      `json:"content"`
-	Rate    RateResponse `json:"rate"`
+	Content  Content      `json:"content"`
+	Metadata string       `json:"metadata"`
+	Rate     RateResponse `json:"rate"`
 }
 
 type Content struct {
@@ -120,7 +121,7 @@ func (c *Client) GetContentWithToken(token string) (ContentResponse, error) {
 	if err != nil {
 		return ContentResponse{}, err
 	}
-	if len(contentResponse) == 0 || contentResponse[0].Content == "" {
+	if len(contentResponse) == 0 || contentResponse[0].Content.Main == "" {
 		return ContentResponse{}, errors.New("could not get content")
 	}
 	return contentResponse[0], nil
