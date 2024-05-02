@@ -108,6 +108,10 @@ func (c *Client) GenerateToken(params TokenParams) (string, error) {
 
 func (c *Client) GetContentWithToken(ctx context.Context, token string) (ContentResponse, error) {
 	decryptedToken, err := Decrypt(token, c.secretKey)
+	if err != nil {
+		return ContentResponse{}, err
+	}
+
 	var t tokenStruct
 	err = json.Unmarshal(decryptedToken, &t)
 	if err != nil {
@@ -132,6 +136,10 @@ func (c *Client) GetContentWithToken(ctx context.Context, token string) (Content
 		return ContentResponse{}, err
 	}
 	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ContentResponse{}, err
+	}
+
 	var contentResponse []ContentResponse
 	err = json.Unmarshal(bodyBytes, &contentResponse)
 	if err != nil {
@@ -168,6 +176,9 @@ func (c *Client) GetRate(ctx context.Context, targetUrl string) (RateResponse, e
 		return RateResponse{}, err
 	}
 	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return RateResponse{}, err
+	}
 	var rateResponse []RateResponse
 	err = json.Unmarshal(bodyBytes, &rateResponse)
 	if err != nil {
