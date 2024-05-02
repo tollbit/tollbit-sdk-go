@@ -1,6 +1,7 @@
 package tollbit
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,31 +13,39 @@ type Client struct {
 	secretKey      string
 	organizationId string
 	userAgent      string
-	httpClient     *http.Client
+
+	httpClient *http.Client
 }
 
-func NewClient(SecretKey string, OrganizationId string, UserAgent string) (*Client, error) {
-	c := &Client{
-		secretKey:      SecretKey,
-		organizationId: OrganizationId,
-		userAgent:      UserAgent,
-		httpClient:     http.DefaultClient,
+type Options struct {
+	HttpClient *http.Client
+}
+
+func NewClient(apiToken string, organizationId string, userAgent string, options ...func(*Options)) (*Client, error) {
+	opts := Options{
+		HttpClient: http.DefaultClient,
 	}
-	return c, nil
-}
 
-type TokenParams struct {
-	Url            string
-	MaxPriceMicros int64
-	Currency       string // only supports USD for now
-	LicenseType    LicenseType
+	for _, fn := range options {
+		fn(&opts)
+	}
+
+	c := &Client{
+		secretKey:      apiToken,
+		organizationId: organizationId,
+		userAgent:      userAgent,
+
+		httpClient: opts.HttpClient,
+	}
+
+	return c, nil
 }
 
 // LicenseType these are "enums" for the types of licenses
 type LicenseType string
 
 const (
-	ON_DEMAND_LICENSE LicenseType = "ON_DEMAND_LICENSE"
+	OnDemandLicense LicenseType = "ON_DEMAND_LICENSE"
 )
 
 type tokenStruct struct {
@@ -47,6 +56,13 @@ type tokenStruct struct {
 	MaxPriceMicros int64       `json:"maxPriceMicros"`
 	Currency       string      `json:"currency"`
 	LicenseType    LicenseType `json:"licenseType"`
+}
+
+type TokenParams struct {
+	Url            string
+	MaxPriceMicros int64
+	Currency       string // only supports USD for now
+	LicenseType    LicenseType
 }
 
 type ContentResponse struct {
@@ -90,7 +106,7 @@ func (c *Client) GenerateToken(params TokenParams) (string, error) {
 	return encryptedToken, nil
 }
 
-func (c *Client) GetContentWithToken(token string) (ContentResponse, error) {
+func (c *Client) GetContentWithToken(ctx context.Context, token string) (ContentResponse, error) {
 	decryptedToken, err := Decrypt(token, c.secretKey)
 	var t tokenStruct
 	err = json.Unmarshal(decryptedToken, &t)
@@ -104,7 +120,7 @@ func (c *Client) GetContentWithToken(token string) (ContentResponse, error) {
 	tollbitUrl = strings.TrimPrefix(tollbitUrl, "www.")
 	// then construct the actual url
 	tollbitUrl = "https://api.tollbit.com/dev/v1/content/" + tollbitUrl
-	req, err := http.NewRequest("GET", tollbitUrl, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", tollbitUrl, nil)
 	if err != nil {
 		return ContentResponse{}, err
 	}
@@ -127,26 +143,22 @@ func (c *Client) GetContentWithToken(token string) (ContentResponse, error) {
 	return contentResponse[0], nil
 }
 
-func (c *Client) GetContent(params TokenParams) (ContentResponse, error) {
+func (c *Client) GetContent(ctx context.Context, params TokenParams) (ContentResponse, error) {
 	token, err := c.GenerateToken(params)
 	if err != nil {
 		return ContentResponse{}, err
 	}
-	contentResponse, err := c.GetContentWithToken(token)
-	if err != nil {
-		return ContentResponse{}, err
-	}
-	return contentResponse, nil
+	return c.GetContentWithToken(ctx, token)
 }
 
-func (c *Client) GetRate(targetUrl string) (RateResponse, error) {
+func (c *Client) GetRate(ctx context.Context, targetUrl string) (RateResponse, error) {
 	// first remove the https:// part
 	tollbitUrl := strings.TrimPrefix(strings.TrimPrefix(targetUrl, "https://"), "http://")
 	// then remove any potential www. part
 	tollbitUrl = strings.TrimPrefix(tollbitUrl, "www.")
 	// then construct the actual url
 	tollbitUrl = "https://api.tollbit.com/dev/v1/rate/" + tollbitUrl
-	req, err := http.NewRequest("GET", tollbitUrl, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", tollbitUrl, nil)
 	if err != nil {
 		return RateResponse{}, err
 	}
